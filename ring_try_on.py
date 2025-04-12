@@ -7,6 +7,7 @@ from diffusers.models import AutoencoderKL
 from diffusers import UNet2DConditionModel
 import torch
 import torch.optim as optim
+from tqdm import tqdm
 import safetensors.torch # Needed explicitly for diffusers
 
 class RingData(Dataset):
@@ -236,6 +237,40 @@ def train_step(model, x0, t, c, optimizer, loss_fn, sqrt_alpha_cumprod, sqrt_one
     return loss
 
 
+class CachedRingLatents(Dataset):
+    """
+    Dataset that encodes all images using a pretrained VAE and caches the latent tensors.
+
+    Stores:
+    - c = latent(ring + masked)
+    - x0 = latent(ground truth)
+    """
+
+    def __init__(self, root_path, vae):
+        super().__init__()
+        self.vae = vae.eval()
+        self.scaling = getattr(vae.config, "scaling_factor", 1.0)
+
+        self.obs = RingData(root_path)
+        self.latents = []
+
+        with torch.no_grad():
+            for i in range(len(self.obs)):
+                ring, masked, wearing = self.obs[i]
+
+                ring_lat    = self.vae.encode(ring.unsqueeze(0)).latent_dist.mode() * self.scaling
+                masked_lat  = self.vae.encode(masked.unsqueeze(0)).latent_dist.mode() * self.scaling
+                wearing_lat = self.vae.encode(wearing.unsqueeze(0)).latent_dist.mode() * self.scaling
+
+                cond = ring_lat + masked_lat
+                self.latents.append((cond.squeeze(0), wearing_lat.squeeze(0)))
+
+    def __len__(self):
+        return len(self.latents)
+
+    def __getitem__(self, idx):
+        return self.latents[idx]  # returns (cond_latent, gt_latent)
+
 
 def train_loop(model,vae,num_timesteps,batch_size,shuffle,nepochs,optimizer,loss_fn,image_file_path="/Users/jm/Downloads/Data"):
     """
@@ -252,23 +287,25 @@ def train_loop(model,vae,num_timesteps,batch_size,shuffle,nepochs,optimizer,loss
         loss_fn: training loss (e.g. MSE)
         image_file_path: root path to training image triplets
     """
-    data = DataLoader(RingData(image_file_path),batch_size=batch_size,shuffle=shuffle)
+    data = DataLoader(CachedRingLatents(image_file_path, vae),
+                      batch_size=batch_size, shuffle=shuffle)
     sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod = make_beta_schedule(num_timesteps,beta_start=1e-4,beta_end=.02)
-    scaling = getattr(vae.config, "scaling_factor", 1.0)
+    #scaling = getattr(vae.config, "scaling_factor", 1.0)
     for epoch in range(nepochs):
         epoch_loss = 0.0
-        for batch_idx, batch in enumerate(data):
-            # Encode ring and masked hand as conditioning latent
-            c = (vae.encode(batch[0]).latent_dist.sample() + 
-                 vae.encode(batch[1]).latent_dist.sample()) * scaling
+        for batch_idx, (c, x0) in enumerate(data):
+            # # Encode ring and masked hand as conditioning latent
+            # c = (vae.encode(batch[0]).latent_dist.sample() + 
+            #      vae.encode(batch[1]).latent_dist.sample()) * scaling
 
-            # Encode target image
-            x0 = vae.encode(batch[2]).latent_dist.sample() * scaling
+            # # Encode target image
+            # x0 = vae.encode(batch[2]).latent_dist.sample() * scaling
 
             # Sample random diffusion step
             t = torch.randint(0,num_timesteps,(batch_size,),device=x0.device)
 
-            loss = train_step(model,x0,t,c,optimizer,loss_fn,sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod)
+            loss = train_step(model,x0,t,c,optimizer,loss_fn,
+                              sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod)
 
             epoch_loss += loss.item()
 
@@ -302,10 +339,104 @@ optimizer = optim.Adam(model.parameters(), lr=1e-4)
 # ------------------------------ Training Call ----------------------------------
 num_timesteps = 1000        
 batch_size = 1             
-nepochs = 1        
+nepochs = 2        
 shuffle = True
 
 train_loop(model,vae,num_timesteps,batch_size,shuffle,nepochs,optimizer,loss_fn)
+
+
+
+
+
+# ------------------------------ Testing ----------------------------------
+
+
+@torch.no_grad()
+def generate_hand_with_ring(model, vae, ring_img_path, masked_img_path, num_timesteps):
+    """
+    Generate a hand image wearing the ring, conditioned on ring and masked-hand images.
+    """
+    model.eval()
+
+    # ------------ 1. Load & preprocess images -----------------
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize((512,512)),
+        transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)),
+    ])
+
+    ring_img   = transform(Image.open(ring_img_path).convert("RGB")).unsqueeze(0)
+    masked_img = transform(Image.open(masked_img_path).convert("RGB")).unsqueeze(0)
+
+    # ------------ 2. Encode conditioning images ----------------
+    scaling = getattr(vae.config, "scaling_factor", 1.0)
+    cond = (vae.encode(ring_img).latent_dist.mode() + vae.encode(masked_img).latent_dist.mode()) * scaling
+
+    # ------------ 3. Initialize noisy latent -------------------
+    xt = torch.randn((1, 4, 64, 64))
+
+    # ------------ 4. Precompute diffusion schedule -------------
+    betas = torch.linspace(1e-4, 0.02, num_timesteps)
+    alphas = 1.0 - betas
+    alpha_cumprod = torch.cumprod(alphas, dim=0)
+
+    # ------------ 5. Reverse diffusion loop --------------------
+    for t in tqdm(reversed(range(num_timesteps)), desc="Sampling"):
+        t_tensor = torch.tensor([t])
+        beta_t = betas[t]
+        alpha_t = alphas[t]
+        alpha_bar_t = alpha_cumprod[t]
+
+        pred_noise = model(xt, t_tensor, cond)
+
+        # DDPM x_{t-1} update
+        coef1 = 1 / alpha_t.sqrt()
+        coef2 = (1 - alpha_t) / (1 - alpha_bar_t).sqrt()
+        xt = coef1 * (xt - coef2 * pred_noise)
+
+        if t > 0:
+            noise = torch.randn_like(xt)
+            xt = xt + beta_t.sqrt() * noise
+
+    x0_latent = xt
+
+    # ------------ 6. Decode to image ----------------------------
+    decoded = vae.decode(x0_latent / scaling).sample  # (1, 3, 512, 512)
+    decoded = (decoded.clamp(-1, 1) + 1) / 2  # [0,1]
+    decoded = decoded.cpu().squeeze().permute(1,2,0).numpy()
+    decoded = (decoded * 255).astype("uint8")
+    image = Image.fromarray(decoded)
+
+    return image
+
+# ------------------------- View Generated Image ----------------------------
+
+import matplotlib.pyplot as plt
+from PIL import ImageFilter
+
+image = generate_hand_with_ring(
+    model=model,
+    vae=vae,
+    ring_img_path="/path/to/ring.jpeg",
+    masked_img_path="/path/to/masked.jpeg",
+    num_timesteps=1000,
+    device="cuda" if torch.cuda.is_available() else "cpu"
+)
+
+# Assuming you have a PIL image `image`
+sharp_image = image.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+sharp_image.show()
+
+
+
+
+# ------------------------- Print Learnable Parameters ----------------------------
+
+# print("Trainable parameters:")
+# for name, p in model.named_parameters():
+#     if p.requires_grad:
+#         print(f"  {name}  |  shape: {p.shape}")
+
 
 # ------------------------------ Debugging ----------------------------------
 # sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod =  make_beta_schedule(10,beta_start=1e-4,beta_end=.02)
