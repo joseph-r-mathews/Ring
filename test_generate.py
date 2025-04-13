@@ -1,68 +1,26 @@
+
 from PIL import Image
-from torch.utils.data import Dataset,DataLoader
 import torch.nn as nn
 from torchvision import transforms
-import os 
-from diffusers.models import AutoencoderKL
-from diffusers import UNet2DConditionModel
 import torch
 import torch.optim as optim
 from tqdm import tqdm
 import safetensors.torch # Needed explicitly for diffusers
+from ring_virtual_tryon.models import ConditioningEncoder,MainUNet
+from ring_virtual_tryon.utils import load_architecture
 
+vae, unetA, unetB = load_architecture()
 
-    
+# Recreate model architecture
+model = MainUNet(unetA, ConditioningEncoder(unetB))
 
+print("🔄 Loading model weights from checkpoints/main_unet.pth")
+model.load_state_dict(torch.load("checkpoints/main_unet.pth", map_location="cpu"))
+print("✅ Model loaded and ready for inference")
 
-
-
-
-
-
-
-
-
-
- # returns (cond_latent, gt_latent)
-# Windows rC:\Users\Joe\Desktop\Data
-# Mac /Users/jm/Downloads/Data
-
-
-
-
-# --------------------------- Model Initialization -----------------------------
-vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse")
-
-unetA = UNet2DConditionModel.from_pretrained(
-    "CompVis/stable-diffusion-v1-4", 
-    subfolder="unet", 
-    revision="fp16", 
-    torch_dtype=torch.float32
-)
-unetB = UNet2DConditionModel.from_pretrained(
-    "CompVis/stable-diffusion-v1-4", 
-    subfolder="unet", 
-    revision="fp16", 
-    torch_dtype=torch.float32
-)
-
-model = MainUNet(unetA,ConditioningEncoder(unetB))
-loss_fn = torch.nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=1e-4)
-
-# ------------------------------ Training Call ----------------------------------
-
-num_timesteps = 1000        
-batch_size = 1             
-nepochs = 10        
-shuffle = True
-
-train_loop(model,vae,num_timesteps,batch_size,shuffle,nepochs,optimizer,loss_fn)
-
+model.eval()
 
 # ------------------------------ Testing ----------------------------------
-
-
 @torch.no_grad()
 def generate_hand_with_ring(model, vae, ring_img_path, masked_img_path, num_timesteps):
     """
@@ -114,13 +72,6 @@ def generate_hand_with_ring(model, vae, ring_img_path, masked_img_path, num_time
 
     x0_latent = xt
 
-    # # ------------ 6. Decode to image ----------------------------
-    # decoded = vae.decode(x0_latent / scaling).sample  # (1, 3, 512, 512)
-    # decoded = (decoded.clamp(-1, 1) + 1) / 2  # [0,1]
-    # decoded = decoded.cpu().squeeze().permute(1,2,0).numpy()
-    # decoded = (decoded * 255).astype("uint8")
-    # image = Image.fromarray(decoded)
-
     return x0_latent
 
 # ------------------------- View Generated Image ----------------------------
@@ -141,8 +92,6 @@ x0_latent = generate_hand_with_ring(
 scaling = getattr(vae.config, "scaling_factor", 1.0)
 decoded_raw = vae.decode(x0_latent/scaling).sample  # Shape: (1, 3, 512, 512)
 
-
-
 # Print raw statistics to verify range
 print("Decoded raw stats: min={:.4f}, max={:.4f}, mean={:.4f}".format(
     decoded_raw.min().item(), decoded_raw.max().item(), decoded_raw.mean().item()))
@@ -161,27 +110,3 @@ decoded_img = (decoded_img * 255).astype("uint8")
 from PIL import Image
 reconstructed_image = Image.fromarray(decoded_img)
 reconstructed_image.show()
-
-# ------------------------- Print Learnable Parameters ----------------------------
-
-# print("Trainable parameters:")
-# for name, p in model.named_parameters():
-#     if p.requires_grad:
-#         print(f"  {name}  |  shape: {p.shape}")
-
-
-# ------------------------------ Debugging ----------------------------------
-# sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod =  make_beta_schedule(10,beta_start=1e-4,beta_end=.02)
-# x0 = torch.randn([10,4,64,64])
-# t = torch.randint(0,10,(10,))
-# epsilon = torch.randn(x0.shape)
-
-
-# t = torch.randint(0,10,(1,))
-# temb = unetB.time_embedding(unetB.time_proj(t))
-# cond = ConditioningEncoder(unetA)
-# c = torch.randn([1,4,64,64])
-# x = torch.randn([1,4,64,64])
-# model = MainUNet(unetB,cond)
-
-# out=model(x,t,c)
