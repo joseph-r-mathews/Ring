@@ -270,9 +270,11 @@ class CachedRingLatents(Dataset):
 
     def __getitem__(self, idx):
         return self.latents[idx]  # returns (cond_latent, gt_latent)
+# Windows rC:\Users\Joe\Desktop\Data
+# Mac /Users/jm/Downloads/Data
 
-
-def train_loop(model,vae,num_timesteps,batch_size,shuffle,nepochs,optimizer,loss_fn,image_file_path="/Users/jm/Downloads/Data"):
+def train_loop(model,vae,num_timesteps,batch_size,shuffle,nepochs,optimizer,loss_fn,
+               image_file_path=r"C:\Users\Joe\Desktop\Data"):
     """
     Full training loop for the ring-conditioned diffusion model.
 
@@ -287,6 +289,7 @@ def train_loop(model,vae,num_timesteps,batch_size,shuffle,nepochs,optimizer,loss
         loss_fn: training loss (e.g. MSE)
         image_file_path: root path to training image triplets
     """
+
     data = DataLoader(CachedRingLatents(image_file_path, vae),
                       batch_size=batch_size, shuffle=shuffle)
     sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod = make_beta_schedule(num_timesteps,beta_start=1e-4,beta_end=.02)
@@ -337,15 +340,13 @@ loss_fn = torch.nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 # ------------------------------ Training Call ----------------------------------
+
 num_timesteps = 1000        
 batch_size = 1             
-nepochs = 2        
+nepochs = 10        
 shuffle = True
 
 train_loop(model,vae,num_timesteps,batch_size,shuffle,nepochs,optimizer,loss_fn)
-
-
-
 
 
 # ------------------------------ Testing ----------------------------------
@@ -388,10 +389,12 @@ def generate_hand_with_ring(model, vae, ring_img_path, masked_img_path, num_time
         alpha_bar_t = alpha_cumprod[t]
 
         pred_noise = model(xt, t_tensor, cond)
-
+        print(f"[Step t={t}] pred_noise stats: min={pred_noise.min():.6f}, "
+              f"max={pred_noise.max():.6f}, mean={pred_noise.mean():.6f}")
         # DDPM x_{t-1} update
         coef1 = 1 / alpha_t.sqrt()
         coef2 = (1 - alpha_t) / (1 - alpha_bar_t).sqrt()
+        print(f"[Step t={t}] xt stats: min={xt.min():.6f}, max={xt.max():.6f}, mean={xt.mean():.6f}")
         xt = coef1 * (xt - coef2 * pred_noise)
 
         if t > 0:
@@ -400,35 +403,53 @@ def generate_hand_with_ring(model, vae, ring_img_path, masked_img_path, num_time
 
     x0_latent = xt
 
-    # ------------ 6. Decode to image ----------------------------
-    decoded = vae.decode(x0_latent / scaling).sample  # (1, 3, 512, 512)
-    decoded = (decoded.clamp(-1, 1) + 1) / 2  # [0,1]
-    decoded = decoded.cpu().squeeze().permute(1,2,0).numpy()
-    decoded = (decoded * 255).astype("uint8")
-    image = Image.fromarray(decoded)
+    # # ------------ 6. Decode to image ----------------------------
+    # decoded = vae.decode(x0_latent / scaling).sample  # (1, 3, 512, 512)
+    # decoded = (decoded.clamp(-1, 1) + 1) / 2  # [0,1]
+    # decoded = decoded.cpu().squeeze().permute(1,2,0).numpy()
+    # decoded = (decoded * 255).astype("uint8")
+    # image = Image.fromarray(decoded)
 
-    return image
+    return x0_latent
 
 # ------------------------- View Generated Image ----------------------------
 
 import matplotlib.pyplot as plt
 from PIL import ImageFilter
 
-image = generate_hand_with_ring(
+x0_latent = generate_hand_with_ring(
     model=model,
     vae=vae,
-    ring_img_path="/path/to/ring.jpeg",
-    masked_img_path="/path/to/masked.jpeg",
-    num_timesteps=1000,
-    device="cuda" if torch.cuda.is_available() else "cpu"
+    ring_img_path=r"C:\Users\Joe\Desktop\Data\1\ring.jpeg",
+    masked_img_path=r"C:\Users\Joe\Desktop\Data\1\masked.jpeg",
+    num_timesteps=1000
 )
 
-# Assuming you have a PIL image `image`
-sharp_image = image.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
-sharp_image.show()
+#Decoded raw stats: min=-1.0141, max=0.9925, mean=-0.1280
+
+scaling = getattr(vae.config, "scaling_factor", 1.0)
+decoded_raw = vae.decode(x0_latent/scaling).sample  # Shape: (1, 3, 512, 512)
 
 
 
+# Print raw statistics to verify range
+print("Decoded raw stats: min={:.4f}, max={:.4f}, mean={:.4f}".format(
+    decoded_raw.min().item(), decoded_raw.max().item(), decoded_raw.mean().item()))
+
+# Post-process the decoded tensor:
+# 1. Clamp to [-1, 1] (optional if your outputs are already mostly in that range)
+decoded_clamped = decoded_raw.clamp(-1, 1)
+# 2. Normalize to [0, 1]
+decoded_norm = (decoded_clamped + 1) / 2
+# 3. Remove the batch dimension and reorder dimensions to (H, W, C)
+decoded_img = decoded_norm.squeeze().permute(1, 2, 0).detach().cpu().numpy()
+# 4. Convert to 8-bit pixel values
+decoded_img = (decoded_img * 255).astype("uint8")
+
+# Create and show the image
+from PIL import Image
+reconstructed_image = Image.fromarray(decoded_img)
+reconstructed_image.show()
 
 # ------------------------- Print Learnable Parameters ----------------------------
 
