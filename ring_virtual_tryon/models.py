@@ -124,7 +124,7 @@ class MainUNet(nn.Module):
         self.up_blocks      = self.unet.up_blocks
         self.mid_block      = self.unet.mid_block
 
-    def forward(self, x, t, c):
+    def forward(self, x, t, c=None):
         """
         Args:
             x (Tensor): Noisy input latent (B, 4, 64, 64)
@@ -150,24 +150,26 @@ class MainUNet(nn.Module):
         h = self.mid_block(h, temb)
         
         # Encode conditioning image
-        cond_skips = self.cond(c, temb) 
+        #cond_skips = self.cond(c, temb) 
 
         # Decoder with per-layer conditioning fusion
         for ub in self.up_blocks:
             
             n = len(ub.resnets)           
             img_slice  = img_skips[-n:];  img_skips  = img_skips[:-n]
-            cond_slice = cond_skips[-n:]; cond_skips = cond_skips[:-n]
+            #cond_slice = cond_skips[-n:]; cond_skips = cond_skips[:-n]
 
-            if not hasattr(ub, "cond_conv"):
-            # Create a ModuleList of ZeroConv2d layers, one per skip connection.
-                ub.cond_conv = nn.ModuleList([
-                    ZeroConv2d(cond.shape[1]) for cond in cond_slice
-                ])
-            merged_skips = [
-                img + conv(cond)
-                for img, cond, conv in zip(img_slice, cond_slice, ub.cond_conv)
-            ]
+
+            merged_skips = img_slice
+            # if not hasattr(ub, "cond_conv"):
+            # # Create a ModuleList of ZeroConv2d layers, one per skip connection.
+            #     ub.cond_conv = nn.ModuleList([
+            #         ZeroConv2d(cond.shape[1]) for cond in cond_slice
+            #     ])
+            # merged_skips = [
+            #     img + conv(cond)
+            #     for img, cond, conv in zip(img_slice, cond_slice, ub.cond_conv)
+            # ]
 
             h = ub(h, tuple(merged_skips), temb=temb)
 

@@ -84,7 +84,7 @@ x0_latent = generate_hand_with_ring(
     vae=vae,
     ring_img_path=r"C:\Users\Joe\Desktop\Data\1\ring.jpeg",
     masked_img_path=r"C:\Users\Joe\Desktop\Data\1\masked.jpeg",
-    num_timesteps=1000
+    num_timesteps=10
 )
 
 #Decoded raw stats: min=-1.0141, max=0.9925, mean=-0.1280
