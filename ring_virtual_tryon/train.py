@@ -24,7 +24,6 @@ def train_loop(model,vae,num_timesteps,batch_size,shuffle,nepochs,optimizer,loss
     data = DataLoader(CachedRingLatents(image_file_path, vae),
                       batch_size=batch_size, shuffle=shuffle)
     sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod = make_beta_schedule(num_timesteps,beta_start=1e-4,beta_end=.02)
-    #scaling = getattr(vae.config, "scaling_factor", 1.0)
     for epoch in range(nepochs):
         epoch_loss = 0.0
         for batch_idx, (c, x0) in enumerate(data):
@@ -32,7 +31,7 @@ def train_loop(model,vae,num_timesteps,batch_size,shuffle,nepochs,optimizer,loss
             # Sample random diffusion step
             t = torch.randint(0,num_timesteps,(batch_size,),device=x0.device)
 
-            loss = train_step(model,x0,t,c,optimizer,loss_fn,
+            loss = train_step(model,x0,t,c,vae,optimizer,loss_fn,
                               sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod)
 
             epoch_loss += loss.item()

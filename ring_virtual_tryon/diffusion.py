@@ -16,7 +16,7 @@ def forward_diffusion_sample(x0,t,epsilon,sqrt_alpha_cumprod,sqrt_one_minus_alph
     sqrt_one_minus_alpha_t = sqrt_one_minus_alphas_cumprod[t].view(-1,1,1,1)
     return sqrt_alpha_t*x0 + sqrt_one_minus_alpha_t*epsilon
 
-def train_step(model, x0, t, c, optimizer, loss_fn, sqrt_alpha_cumprod, sqrt_one_minus_alphas_cumprod):
+def train_step(model, x0, t, c, vae, optimizer, loss_fn, sqrt_alpha_cumprod, sqrt_one_minus_alphas_cumprod):
     """
     Single training step for DDPM loss.
 
@@ -33,12 +33,29 @@ def train_step(model, x0, t, c, optimizer, loss_fn, sqrt_alpha_cumprod, sqrt_one
     Returns:
         Scalar loss
     """
-    model.train()
+    optimizer.zero_grad()
     epsilon = torch.randn(x0.shape)
     xt = forward_diffusion_sample(x0,t,epsilon,sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod)
     predicted_noise = model(xt,t,c)
-    loss = loss_fn(predicted_noise,epsilon)
-    optimizer.zero_grad()
-    loss.backward()
+    
+    loss_diffusion = loss_fn(predicted_noise,epsilon)
+
+    # --- Image Reconstruction Loss ---
+    x0_pred = (xt - sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1, 1) * predicted_noise) / \
+              sqrt_alpha_cumprod[t].view(-1, 1, 1, 1)
+              
+    with torch.no_grad():
+        decoded_img = vae.decode(x0_pred / vae.config.scaling_factor)["sample"]
+    
+    with torch.no_grad():
+        target_img = vae.decode(x0 / vae.config.scaling_factor)["sample"]
+
+    loss_img = torch.nn.functional.l1_loss(decoded_img, target_img)
+
+    lambda_img = 0.1 
+    total_loss = loss_diffusion + lambda_img * loss_img
+
+    
+    total_loss.backward()
     optimizer.step()
-    return loss
+    return total_loss
