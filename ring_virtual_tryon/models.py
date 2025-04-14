@@ -2,40 +2,6 @@ import torch.nn as nn
 from diffusers import UNet2DConditionModel
 import torch
 
-
-def strip_cross_attention(unet):
-    """
-    Replaces all cross-attention layers (.attn2) in a Stable Diffusion UNet 
-    with identity modules.
-
-    This is useful for replacing text-based conditioning with image-based 
-    conditioning. Cross-attention layers are used for text-to-image tasks; 
-    when conditioning on images, these layers are unnecessary and are 
-    replaced with no-op identity modules to avoid parameter updates.
-
-    Args:
-        unet (UNet2DConditionModel): A pretrained Stable Diffusion UNet.
-
-    Returns:
-        UNet2DConditionModel: The modified UNet with stripped cross-attention.
-    """
-    class IdentityAttn(nn.Module):
-        def forward(
-            self,
-            hidden_states,
-            encoder_hidden_states=None,
-            attention_mask=None,
-            **kwargs
-        ):
-            return hidden_states
-
-    for m in unet.modules():
-        if hasattr(m, "attn2"):
-            m.attn2 = IdentityAttn()
-    return unet
-
-
-
 class ZeroConv2d(nn.Module):
     """
     A 1x1 convolution layer initialized to zero.
@@ -52,8 +18,6 @@ class ZeroConv2d(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-
-
 class ConditioningEncoder(nn.Module):
     """
     Encoder used to extract conditioning features from ring and masked-hand images.
@@ -66,10 +30,9 @@ class ConditioningEncoder(nn.Module):
         unet (UNet2DConditionModel): A pretrained Stable Diffusion UNet instance.
         trainable (bool): Whether the encoder is trainable (default: True).
     """
-
     def __init__(self, unet: UNet2DConditionModel, trainable=True):
         super().__init__()
-        self.unet = strip_cross_attention(unet) 
+        self.unet = unet 
         
         self.conv_in     = self.unet.conv_in
         self.down_blocks = self.unet.down_blocks
@@ -196,3 +159,35 @@ class MainUNet(nn.Module):
             sample = self.conv_act(sample)
         sample = self.conv_out(sample)
         return sample
+    
+
+# def strip_cross_attention(unet):
+#     """
+#     Replaces all cross-attention layers (.attn2) in a Stable Diffusion UNet 
+#     with identity modules.
+
+#     This is useful for replacing text-based conditioning with image-based 
+#     conditioning. Cross-attention layers are used for text-to-image tasks; 
+#     when conditioning on images, these layers are unnecessary and are 
+#     replaced with no-op identity modules to avoid parameter updates.
+
+#     Args:
+#         unet (UNet2DConditionModel): A pretrained Stable Diffusion UNet.
+
+#     Returns:
+#         UNet2DConditionModel: The modified UNet with stripped cross-attention.
+#     """
+#     class IdentityAttn(nn.Module):
+#         def forward(
+#             self,
+#             hidden_states,
+#             encoder_hidden_states=None,
+#             attention_mask=None,
+#             **kwargs
+#         ):
+#             return hidden_states
+
+#     for m in unet.modules():
+#         if hasattr(m, "attn2"):
+#             m.attn2 = IdentityAttn()
+#     return unet
