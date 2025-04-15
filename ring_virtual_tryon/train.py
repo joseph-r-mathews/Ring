@@ -1,12 +1,12 @@
 from .dataset import CachedRingLatents
 from torch.utils.data import DataLoader
 import torch
-from .diffusion import train_step,make_beta_schedule
+from .diffusion import train_step
 
 
 def train_loop(model, vae, tokenizer, text_encoder, scheduler, optimizer, loss_fn,
-               num_inference_steps=1000, batch_size=1, shuffle=True, nepochs=10,
-               guidance_scale=7.5, height=512, width=512, generator = None, device = None, 
+               batch_size=1, shuffle=True, nepochs=10,
+               guidance_scale=7.5, device = None, 
                image_file_path=r"C:\Users\Joe\Desktop\Data"):
                
     """
@@ -24,24 +24,53 @@ def train_loop(model, vae, tokenizer, text_encoder, scheduler, optimizer, loss_f
         image_file_path: root path to training image triplets
     """
 
-
-
-
     data = DataLoader(CachedRingLatents(image_file_path, vae), batch_size=batch_size, shuffle=shuffle)
 
+        # Set device
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+    # --- 2. Encode Prompt ---
+    # Tokenize and encode prompt into text embeddings.
+    prompt = "hand with ring on ring finger"
+    text_inputs = tokenizer(
+        prompt,
+        padding="max_length",
+        max_length=tokenizer.model_max_length,
+        truncation=True,
+        return_tensors="pt",
+    )
+    text_input_ids = text_inputs.input_ids.to(device)
+    text_embeds = text_encoder(text_input_ids).last_hidden_state
 
-    
+    # For classifier free guidance, generate unconditional (empty prompt) embeddings.
+    uncond_inputs = tokenizer(
+        [""] * (1 if isinstance(prompt, str) else len(prompt)),
+        padding="max_length",
+        max_length=tokenizer.model_max_length,
+        truncation=True,
+        return_tensors="pt",
+    )
+    uncond_ids = uncond_inputs.input_ids.to(device)
+    uncond_embeds = text_encoder(uncond_ids).last_hidden_state
 
-    sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod = make_beta_schedule(num_inference_steps,beta_start=1e-4,beta_end=.02)
+    # Concatenate for guidance.
+    if guidance_scale > 1.0:
+        # The first half (for unconditional), the second half (for prompt).
+        text_embeds = torch.cat([uncond_embeds, text_embeds])
+
     for epoch in range(nepochs):
         epoch_loss = 0.0
         for batch_idx, (c, x0) in enumerate(data):
 
+            x0 = x0.to(device)
+            c = c.to(device)
+
             # Sample random diffusion step
-            t = torch.randint(0,num_inference_steps,(batch_size,),device=x0.device)
+            t = torch.randint(0, scheduler.config.num_train_timesteps, (batch_size,), device=device)
 
 
-            loss = train_step(model,x0,t,c,vae,optimizer,loss_fn,scheduler)
+            loss = train_step(model, vae, scheduler, loss_fn, x0, t, text_embeds, optimizer, device)
 
             epoch_loss += loss.item()
 

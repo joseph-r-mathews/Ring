@@ -7,7 +7,7 @@ import torch
 #     return torch.sqrt(alphas_cumprod),torch.sqrt(1.0 - alphas_cumprod)
 
 
-def forward_diffusion_sample(x0,t,epsilon,scheduler,sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod):
+def forward_diffusion_sample(x0,t,epsilon,sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod):
     """
     Applies forward diffusion to x0 at timestep t.
     Returns the noisy version xt.
@@ -21,7 +21,7 @@ def x0_prediction(xt,t,predicted_noise,sqrt_alpha_cumprod,sqrt_one_minus_alphas_
               sqrt_alpha_cumprod[t].view(-1, 1, 1, 1)
 
 
-def train_step(model, x0, t, encoder_hidden_states, c, vae, optimizer, loss_fn, scheduler):
+def train_step(model, vae, scheduler, loss_fn, x0, t, encoder_hidden_states ,c, optimizer, device):
     """
     Single training step for DDPM loss.
 
@@ -38,15 +38,19 @@ def train_step(model, x0, t, encoder_hidden_states, c, vae, optimizer, loss_fn, 
     Returns:
         Scalar loss
     """
+    model.train()
     optimizer.zero_grad()
 
     alphas_cumprod = scheduler.alphas_cumprod
     sqrt_alpha_cumprod = torch.sqrt(alphas_cumprod)
     sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - alphas_cumprod)
 
+    epsilon = torch.randn(x0.shape).to(device)
 
-    epsilon = torch.randn(x0.shape)
-    xt = forward_diffusion_sample(x0,t,epsilon,sqrt_alpha_cumprod,sqrt_one_minus_alphas_cumprod)
+    xt = forward_diffusion_sample(x0,t,epsilon,
+                                  sqrt_alpha_cumprod,
+                                  sqrt_one_minus_alphas_cumprod)
+    
     predicted_noise = model(xt,t,encoder_hidden_states,c)
     
     loss_diffusion = loss_fn(predicted_noise,epsilon)
@@ -56,8 +60,6 @@ def train_step(model, x0, t, encoder_hidden_states, c, vae, optimizer, loss_fn, 
               
     with torch.no_grad():
         decoded_img = vae.decode(x0_pred / vae.config.scaling_factor)["sample"]
-    
-    with torch.no_grad():
         target_img = vae.decode(x0 / vae.config.scaling_factor)["sample"]
 
     loss_img = torch.nn.functional.l1_loss(decoded_img, target_img)
