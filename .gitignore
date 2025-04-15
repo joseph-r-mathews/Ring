@@ -18,3 +18,8 @@ venv/
 
 # Log files
 *.log
+
+checkpoints/
+*.pth
+*.ckpt
+*.h5
