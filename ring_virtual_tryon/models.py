@@ -141,15 +141,15 @@ class MainUNet(nn.Module):
         Returns:
             Tensor: Predicted noise tensor (B, 4, 64, 64).
         """
-        # --- 1. Time embedding
+        # --- Time embedding ---
         t_emb = self.get_time_embed(sample=sample, timestep=timestep)
         emb = self.time_embedding(t_emb)
 
-        # --- 2. Pre-process input using conv_in and store initial residual.
+        # --- Pre-process input using conv_in and store initial residual ---
         sample = self.conv_in(sample)
         down_block_res_samples = (sample,)
 
-        # --- 3. UNet encoder (downsampling path)
+        # --- UNet encoder (downsampling path) ---
         for down_block in self.down_blocks:
             sample, res_samples = down_block(
                 hidden_states=sample,
@@ -158,13 +158,13 @@ class MainUNet(nn.Module):
             )
             down_block_res_samples += res_samples
 
-        # --- 4. mid block (bottleneck).
+        # --- mid block (bottleneck) ---
         sample = self.mid_block(sample, emb, encoder_hidden_states=encoder_hidden_states)
 
-        # --- 5. conditioning features.
+        # --- conditioning features ---
         cond_skips = self.cond(condition_features, emb)
 
-        # --- 6. UNet decoder (upsampling path with conditioning fusion)
+        # --- UNet decoder (upsampling path with conditioning fusion) ---
         for up_block in self.up_blocks:
 
             # num_resnets usually 2 or 3 in standard Stable Diffusion model
@@ -196,7 +196,7 @@ class MainUNet(nn.Module):
                 encoder_hidden_states=encoder_hidden_states
             )
 
-        # --- 7. Post-process: normalization & final convolution.
+        # --- Post-process: normalization & final convolution ---
         if self.conv_norm_out is not None:
             sample = self.conv_norm_out(sample)
             sample = self.conv_act(sample)

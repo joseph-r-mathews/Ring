@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 import torch
 from diffusion import train_step
 
+# importlib.reload(diffusion)
 
 def train_loop(model, vae, tokenizer, text_encoder, scheduler, optimizer, 
                loss_fn_diffusion, loss_fn_img,
@@ -74,9 +75,3 @@ def train_loop(model, vae, tokenizer, text_encoder, scheduler, optimizer,
         # Compute and print epoch-level average loss
         avg_loss = epoch_loss / len(data)
         print(f"Epoch [{epoch+1}/{nepochs}] Average Loss: {avg_loss:.4f}")
-
-
-
-
-
-
