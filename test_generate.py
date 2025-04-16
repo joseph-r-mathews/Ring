@@ -55,7 +55,6 @@ def generate_hand_with_ring(
     model.eval()
 
     # ---------------- Load & Preprocess Conditioning Images ----------------
-
     # Define preprocessing transform:
     # - Convert image to tensor.
     # - Resize image to 512x512.
@@ -72,7 +71,6 @@ def generate_hand_with_ring(
     masked_img = transform(Image.open(masked_img_path).convert("RGB")).unsqueeze(0)
 
     # ---------------- Encode Conditioning Images -------------------
-
     # Get the VAE scaling factor (used in Stable Diffusion)
     scaling = getattr(vae.config, "scaling_factor", 1.0)
     # Encode both images with the VAE encoder; then sum the latent representations.
@@ -80,9 +78,7 @@ def generate_hand_with_ring(
     condition_features = (vae.encode(ring_img).latent_dist.mode() + 
                           vae.encode(masked_img).latent_dist.mode()) * scaling
 
-
     # ---------------- Encode Text Prompt -------------------
-
     prompt = "hand with ring on the ring finger"
 
     # Tokenize and encode the prompt with CLIP's text encoder.
@@ -116,17 +112,14 @@ def generate_hand_with_ring(
         condition_features = torch.cat([condition_features] * 2)
 
     # ---------------- Prepare Initial Latent Variables ----------------
-
     # Latents are sampled from a standard Gaussian. The spatial dimensions are typically 1/8 of the image.
     latent_shape = (1, unetA.config.in_channels, height // 8, width // 8)
     latents = torch.randn(latent_shape, generator=generator, device=device)
 
     # ---------------- Set Scheduler Timesteps ------------------
-
     scheduler.set_timesteps(num_timesteps)
 
     # ---------------- Reverse Diffusion (Denoising) Loop ----------------
-
     for i, t in enumerate(scheduler.timesteps):
         print(f"Step {i+1}/{num_timesteps}, timestep: {t}")
 
@@ -148,14 +141,12 @@ def generate_hand_with_ring(
         latents = scheduler.step(noise_pred, t, latents)["prev_sample"]
 
     # ---------------- Decode the Final Latent to an Image ----------------
-
     # The scaling factor (0.18215) is as used in the original implementation.
     latents = latents / scaling
     with torch.no_grad():
         decoded = vae.decode(latents)["sample"]
 
     # ---------------- Postprocess the Image ----------------
-
     # Convert the image from [-1, 1] to [0, 1] and rearrange the dimensions to (batch, H, W, C).
     image = (decoded / 2 + 0.5).clamp(0, 1)
     image = image.cpu().permute(0, 2, 3, 1).numpy()  # (batch, height, width, channels)
