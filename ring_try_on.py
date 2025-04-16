@@ -19,7 +19,11 @@ import safetensors.torch # Needed explicitly for diffusers
 
 
 
-
+# def make_beta_schedule(num_timesteps,beta_start=1e-4,beta_end=.02):
+#     """Creates a linear beta schedule for the diffusion process."""
+#     betas = torch.linspace(beta_start,beta_end,num_timesteps)
+#     alphas_cumprod = torch.cumprod(1.0 - betas,dim=0)
+#     return torch.sqrt(alphas_cumprod),torch.sqrt(1.0 - alphas_cumprod)
 
 
 
