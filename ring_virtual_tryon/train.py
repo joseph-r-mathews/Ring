@@ -1,7 +1,7 @@
-from dataset import CachedRingLatents
+from .dataset import CachedRingLatents
 from torch.utils.data import DataLoader
 import torch
-from diffusion import train_step
+from .diffusion import train_step
 
 # importlib.reload(diffusion)
 
@@ -46,7 +46,11 @@ def train_loop(model, vae, tokenizer, text_encoder, scheduler, optimizer,
         return_tensors="pt",
     )
     text_input_ids = text_inputs.input_ids.to(device)
-    text_embeds = text_encoder(text_input_ids).last_hidden_state # (1, 77, 768)
+    
+    with torch.no_grad():
+        text_embeds = text_encoder(text_input_ids).last_hidden_state
+    
+    text_embeds = text_embeds.detach() # (1, 77, 768)
 
     for epoch in range(nepochs):
         epoch_loss = 0.0

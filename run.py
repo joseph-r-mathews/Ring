@@ -1,4 +1,3 @@
-
 import torch
 import torch.optim as optim
 # From other modules
@@ -15,13 +14,11 @@ loss_fn_img = torch.nn.L1Loss()
 optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 # ------------------------------ Training Call ----------------------------------
-num_timesteps = 1000        
-batch_size = 1                    
 
 train_loop(model, vae, tokenizer, text_encoder, scheduler, optimizer, 
            loss_fn_diffusion, loss_fn_img,
-           batch_size = 1, shuffle=True, nepochs = 1, device = None, 
-           image_file_path="/Users/jm/Downloads/Data")
+           batch_size = 1, shuffle=True, nepochs = 30, device = None, 
+           image_file_path=r"C:\Users\Joe\Desktop\Data")
 
 torch.save(model.state_dict(), "checkpoints/main_unet.pth")
 print("✅ Model saved to checkpoints/main_unet.pth")

@@ -122,7 +122,8 @@ def train_step(model, vae, scheduler,optimizer,
 
 # optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
-# image_file_path="/Users/jm/Downloads/Data"
+# #"/Users/jm/Downloads/Data"
+# image_file_path=r"C:\Users\Joe\Desktop\Data"
 
 # data = DataLoader(CachedRingLatents(image_file_path, vae), batch_size, shuffle)
 # # --- Encode Prompt ---
@@ -136,9 +137,17 @@ def train_step(model, vae, scheduler,optimizer,
 #     return_tensors="pt",
 # )
 # text_input_ids = text_inputs.input_ids.to(device)
-# text_embeds = text_encoder(text_input_ids).last_hidden_state
+
+# with torch.no_grad():
+#     text_embeds = text_encoder(text_input_ids).last_hidden_state
+
+# text_embeds = text_embeds.detach()
 
 # condition_features, x0 = next(iter(data))
+# t = torch.randint(0, scheduler.config.num_train_timesteps, (batch_size,), device=device)
 
-# train_step(model, vae, scheduler, loss_fn_diffusion,loss_fn_img, x0, 100, text_embeds ,
-#            condition_features, optimizer, device)
+# train_step(
+#                 model, vae, scheduler, optimizer, 
+#                 loss_fn_diffusion, loss_fn_img,
+#                 x0, t, text_embeds , condition_features, device
+#             )
