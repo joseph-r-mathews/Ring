@@ -125,6 +125,33 @@ class MainUNet(nn.Module):
         self.conv_norm_out = getattr(self.unet, "conv_norm_out", None)
         self.conv_act      = getattr(self.unet, "conv_act", None)
 
+        with torch.no_grad():
+            # create a dummy latent at the right size & device
+            device = next(self.unet.parameters()).device
+            dummy_latent = torch.zeros(1, unet.config.in_channels, 64, 64, device=device)
+            dummy_t = torch.zeros(1, dtype=torch.long, device=device)
+            t_emb = self.get_time_embed(sample=dummy_latent, timestep=dummy_t)
+            emb = self.time_embedding(t_emb)
+            dummy_skips = self.cond(dummy_latent, emb)  # tuple of length = total resnets + 1
+            skip_channels = [s.shape[1] for s in dummy_skips]
+
+        # 2) Build cond_conv for each up_block *in the exact same pop order*:
+        self.cond_convs = nn.ModuleList()
+        dims = skip_channels[:]  # copy so we can pop from it
+        for up_block in self.up_blocks:
+            n = len(up_block.resnets)
+            # take the last `n` dims (these correspond to this block's cond_skips)
+            conv_dims = dims[-n:]
+            # remove them so next iteration grabs the previous ones
+            dims = dims[:-n]
+            # build one ZeroConv2d per skip
+            convs = nn.ModuleList([ZeroConv2d(ch) for ch in conv_dims])
+            # register on both the block and in our master list
+            up_block.cond_conv = convs
+            self.cond_convs.append(convs)
+
+
+
     def forward(self, sample: torch.Tensor,
                     timestep: torch.Tensor,
                     encoder_hidden_states: torch.Tensor,
@@ -178,9 +205,9 @@ class MainUNet(nn.Module):
             cond_slice = cond_skips[-num_resnets:]
             cond_skips = cond_skips[:-num_resnets]
             
-            # Create or reuse a list of ZeroConv2d layers to adjust conditioning features.
-            if not hasattr(up_block, "cond_conv"):
-                up_block.cond_conv = nn.ModuleList([ZeroConv2d(cond.shape[1]) for cond in cond_slice])
+            # # Create or reuse a list of ZeroConv2d layers to adjust conditioning features.
+            # if not hasattr(up_block, "cond_conv"):
+            #     up_block.cond_conv = nn.ModuleList([ZeroConv2d(cond.shape[1]) for cond in cond_slice])
             
             # Fuse the skip features: here, we add the processed conditioning features to the image features.
             merged_skips = [

@@ -17,7 +17,7 @@ optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 train_loop(model, vae, tokenizer, text_encoder, scheduler, optimizer, 
            loss_fn_diffusion, loss_fn_img,
-           batch_size = 1, shuffle=True, nepochs = 30, device = None, 
+           batch_size = 1, shuffle=True, nepochs = 10, device = None, 
            image_file_path=r"C:\Users\Joe\Desktop\Data")
 
 torch.save(model.state_dict(), "checkpoints/main_unet.pth")

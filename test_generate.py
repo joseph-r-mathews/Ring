@@ -19,7 +19,7 @@ print("🔄 Loading model weights from checkpoints/main_unet.pth")
 model.load_state_dict(torch.load("checkpoints/main_unet.pth", map_location="cpu"))
 print("✅ Model loaded and ready for inference")
 
-model.eval()
+
 
 # ------------------------------ Testing ----------------------------------
 @torch.no_grad()
@@ -161,9 +161,9 @@ import matplotlib.pyplot as plt
 
 image = generate_hand_with_ring(
     model, vae, tokenizer, text_encoder, scheduler,
-    "/Users/jm/Downloads/Data/1/ring.jpeg", 
-    "/Users/jm/Downloads/Data/1/masked.jpeg", 
-    5,
+    r"C:\Users\Joe\Desktop\Data\1\ring.jpeg",
+    r"C:\Users\Joe\Desktop\Data\1\masked.jpeg",
+    250,
     height=512, width=512, guidance_scale=7.5, 
     generator=None, device=None)
 
