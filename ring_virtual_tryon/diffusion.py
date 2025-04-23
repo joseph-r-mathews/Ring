@@ -66,7 +66,7 @@ def train_step(model, vae, scheduler,optimizer,
         p.requires_grad = False # <-- Redundant if already frozen elsewhere; not harmful.
 
     # Precompute square roots of alphā_t and 1 - alphā_t from scheduler.
-    alphas_cumprod = scheduler.alphas_cumprod
+    alphas_cumprod = scheduler.alphas_cumprod.to(device)
     sqrt_alpha_cumprod = torch.sqrt(alphas_cumprod)
     sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - alphas_cumprod)
 

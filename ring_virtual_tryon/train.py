@@ -34,6 +34,7 @@ def train_loop(model, vae, tokenizer, text_encoder, scheduler, optimizer,
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
+    
     # --- Encode Prompt (shared across all batches) ---
     prompt = "hand with ring on the ring finger"
     
