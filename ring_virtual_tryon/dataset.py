@@ -61,13 +61,11 @@ class CachedRingLatents(Dataset):
   
                 
                 ring, masked, wearing = self.obs[i]
-
-                assert next(self.vae.parameters()).device == ring.device, \
-                    f"VAE is on {next(self.vae.parameters()).device}, but input is on {ring.device}"
-
-                ring    = ring.to(self.vae.device)
-                masked  = masked.to(self.vae.device)
-                wearing = wearing.to(self.vae.device)
+                
+                device = next(self.vae.parameters()).device
+                ring    = ring.to(device)
+                masked  = masked.to(device)
+                wearing = wearing.to(device)
 
                 ring_lat    = self.vae.encode(ring.unsqueeze(0)).latent_dist.mode() * self.scaling
                 masked_lat  = self.vae.encode(masked.unsqueeze(0)).latent_dist.mode() * self.scaling
