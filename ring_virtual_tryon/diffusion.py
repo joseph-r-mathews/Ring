@@ -66,9 +66,9 @@ def train_step(model, vae, scheduler,optimizer,
         p.requires_grad = False # <-- Redundant if already frozen elsewhere; not harmful.
 
     # Precompute square roots of alphā_t and 1 - alphā_t from scheduler.
-    alphas_cumprod = scheduler.alphas_cumprod.to(device)
-    sqrt_alpha_cumprod = torch.sqrt(alphas_cumprod)
-    sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - alphas_cumprod)
+    alphas_cumprod = scheduler.alphas_cumprod
+    sqrt_alpha_cumprod = torch.sqrt(alphas_cumprod).to(device)
+    sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - alphas_cumprod).to(device)
 
     # Sample Gaussian noise and simulate the forward diffusion process.
     epsilon = torch.randn(x0.shape).to(device)
@@ -86,8 +86,10 @@ def train_step(model, vae, scheduler,optimizer,
     x0_pred = x0_prediction(xt, t, predicted_noise, sqrt_alpha_cumprod, sqrt_one_minus_alphas_cumprod)
               
     # Decode both predicted and ground-truth latents to pixel space for image loss.
+    with torch.no_grad():
+        target_img = vae.decode(x0 / vae.config.scaling_factor)["sample"]
+    
     decoded_img = vae.decode(x0_pred / vae.config.scaling_factor)["sample"]
-    target_img = vae.decode(x0 / vae.config.scaling_factor)["sample"]
 
     # Compute L1 loss in pixel space.
     loss_img = loss_fn_img(decoded_img, target_img)

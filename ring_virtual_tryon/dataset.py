@@ -60,6 +60,10 @@ class CachedRingLatents(Dataset):
             for i in range(len(self.obs)):
                 ring, masked, wearing = self.obs[i]
 
+                ring    = ring.to(self.vae.device)
+                masked  = masked.to(self.vae.device)
+                wearing = wearing.to(self.vae.device)
+
                 ring_lat    = self.vae.encode(ring.unsqueeze(0)).latent_dist.mode() * self.scaling
                 masked_lat  = self.vae.encode(masked.unsqueeze(0)).latent_dist.mode() * self.scaling
                 wearing_lat = self.vae.encode(wearing.unsqueeze(0)).latent_dist.mode() * self.scaling
