@@ -86,14 +86,16 @@ def train_step(model, vae, scheduler,optimizer,
     # Reconstruct predicted clean latent x0 from xt and predicted noise.
     x0_pred = x0_prediction(xt, t, predicted_noise, sqrt_alpha_cumprod, sqrt_one_minus_alphas_cumprod)
               
-    # Decode both predicted and ground-truth latents to pixel space for image loss.
-    with torch.no_grad():
-        target_img = vae.decode(x0 / vae.config.scaling_factor)["sample"]
-        
-    decoded_img = vae.decode(x0_pred / vae.config.scaling_factor)["sample"]
+    # # Decode both predicted and ground-truth latents to pixel space for image loss.
+    # with torch.no_grad():
+    #     target_img = vae.decode(x0 / vae.config.scaling_factor)["sample"]
 
-    # Compute L1 loss in pixel space.
-    loss_img = loss_fn_img(decoded_img, target_img)
+    # decoded_img = vae.decode(x0_pred / vae.config.scaling_factor)["sample"]
+
+    # # Compute L1 loss in pixel space.
+    # loss_img = loss_fn_img(decoded_img, target_img)
+
+    loss_img = loss_fn_img(x0, x0_pred)
 
     lambda_img = 0.1 # Tune this weight as needed.
 
