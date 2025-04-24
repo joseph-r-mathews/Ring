@@ -83,21 +83,14 @@ def train_step(model, vae, scheduler,optimizer,
     # Compute MSE loss for noise error.
     loss_diffusion = loss_fn_diffusion(predicted_noise, epsilon)
 
-    print("📦 xt:", xt.device)
-    print("📦 model params:", next(model.parameters()).device)
-    
-
     # Reconstruct predicted clean latent x0 from xt and predicted noise.
     x0_pred = x0_prediction(xt, t, predicted_noise, sqrt_alpha_cumprod, sqrt_one_minus_alphas_cumprod)
               
     # Decode both predicted and ground-truth latents to pixel space for image loss.
     with torch.no_grad():
         target_img = vae.decode(x0 / vae.config.scaling_factor)["sample"]
-        decoded_img = vae.decode(x0_pred / vae.config.scaling_factor)["sample"]
-
-    print("📏 predicted_noise:", predicted_noise.device)
-    print("📷 decoded_img:", decoded_img.device)
-    print("📷 target_img:", target_img.device)
+        
+    decoded_img = vae.decode(x0_pred / vae.config.scaling_factor)["sample"]
 
     # Compute L1 loss in pixel space.
     loss_img = loss_fn_img(decoded_img, target_img)
@@ -107,10 +100,10 @@ def train_step(model, vae, scheduler,optimizer,
     # Combine both losses: diffusion loss + image reconstruction loss.
     total_loss = loss_diffusion + lambda_img * loss_img
 
-    with torch.autograd.detect_anomaly():
-        total_loss.backward()
+    # with torch.autograd.detect_anomaly():
+    #     total_loss.backward()
 
-    #total_loss.backward()
+    total_loss.backward()
     optimizer.step()
     return total_loss
 
