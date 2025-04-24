@@ -82,6 +82,10 @@ def train_step(model, vae, scheduler,optimizer,
     # Compute MSE loss for noise error.
     loss_diffusion = loss_fn_diffusion(predicted_noise, epsilon)
 
+    print("📦 xt:", xt.device)
+    print("📦 model params:", next(model.parameters()).device)
+    
+
     # Reconstruct predicted clean latent x0 from xt and predicted noise.
     x0_pred = x0_prediction(xt, t, predicted_noise, sqrt_alpha_cumprod, sqrt_one_minus_alphas_cumprod)
               
@@ -90,6 +94,10 @@ def train_step(model, vae, scheduler,optimizer,
         target_img = vae.decode(x0 / vae.config.scaling_factor)["sample"]
     
     decoded_img = vae.decode(x0_pred / vae.config.scaling_factor)["sample"]
+
+    print("📏 predicted_noise:", predicted_noise.device)
+    print("📷 decoded_img:", decoded_img.device)
+    print("📷 target_img:", target_img.device)
 
     # Compute L1 loss in pixel space.
     loss_img = loss_fn_img(decoded_img, target_img)

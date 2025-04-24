@@ -58,7 +58,12 @@ class CachedRingLatents(Dataset):
 
         with torch.no_grad():
             for i in range(len(self.obs)):
+  
+                
                 ring, masked, wearing = self.obs[i]
+
+                assert next(self.vae.parameters()).device == ring.device, \
+                    f"VAE is on {next(self.vae.parameters()).device}, but input is on {ring.device}"
 
                 ring    = ring.to(self.vae.device)
                 masked  = masked.to(self.vae.device)
@@ -68,8 +73,15 @@ class CachedRingLatents(Dataset):
                 masked_lat  = self.vae.encode(masked.unsqueeze(0)).latent_dist.mode() * self.scaling
                 wearing_lat = self.vae.encode(wearing.unsqueeze(0)).latent_dist.mode() * self.scaling
 
+                assert ring_lat.device == masked_lat.device == wearing_lat.device, \
+                    "Latents are on mismatched devices!"
+                
                 cond = ring_lat + masked_lat
                 self.latents.append((cond.squeeze(0), wearing_lat.squeeze(0)))
+                assert self.latents[-1][0].device == next(self.vae.parameters()).device, \
+                    "Cached latent is on different device than VAE"
+
+
 
     def __len__(self):
         return len(self.latents)
