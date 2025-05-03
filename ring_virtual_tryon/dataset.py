@@ -16,7 +16,7 @@ class RingData(Dataset):
 
         self.path = root_path
         self.subfolders = [str(sub_dir.path) for sub_dir in os.scandir(root_path) if sub_dir.is_dir()]
-        data_names = ['wearing.jpeg','masked.jpeg','ring.jpeg']
+        data_names = ['original.jpg','hand_masked.jpg','studio_ring.png']
 
         self.obs = [] 
 
@@ -24,7 +24,7 @@ class RingData(Dataset):
             contents = [o for o in os.listdir(folder)] 
     
             if set(data_names).issubset(contents): 
-                self.obs.append((os.path.join(folder,"ring.jpeg"),os.path.join(folder,'masked.jpeg'),os.path.join(folder,'wearing.jpeg')))
+                self.obs.append((os.path.join(folder,"studio_ring.png"),os.path.join(folder,'hand_masked.jpg'),os.path.join(folder,'original.jpg')))
 
     def __len__(self):
         return len(self.obs)
@@ -61,7 +61,7 @@ class CachedRingLatents(Dataset):
   
                 
                 ring, masked, wearing = self.obs[i]
-                
+
                 device = next(self.vae.parameters()).device
                 ring    = ring.to(device)
                 masked  = masked.to(device)
